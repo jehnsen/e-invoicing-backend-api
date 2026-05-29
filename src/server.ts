@@ -1,14 +1,5 @@
 // Load .env early so `process.env` is populated before any config parsing
 import 'dotenv/config';
-
-// Debug: show whether DATABASE_URL is present (only first 16 chars to avoid leaking secret)
-if (process.env.DATABASE_URL) {
-  // eslint-disable-next-line no-console
-  console.log('DATABASE_URL loaded, prefix:', process.env.DATABASE_URL.slice(0, 16));
-} else {
-  // eslint-disable-next-line no-console
-  console.log('DATABASE_URL not set in process.env');
-}
 import { buildApp } from './app';
 import { env } from './config/env';
 import { logger } from './lib/logger';

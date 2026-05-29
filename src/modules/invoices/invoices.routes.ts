@@ -16,6 +16,7 @@ import {
   updateInvoice,
   submitInvoice,
   cancelInvoice,
+  syncInvoiceStatus,
 } from './invoices.service';
 import { getArchiveRecord } from '../archive/archive.service';
 import { assertUser } from '../../lib/request-context';
@@ -104,6 +105,21 @@ const invoicesRoutes: FastifyPluginAsync = async (fastify) => {
         user.tenantId,
         request.params.id,
         request.body,
+        user.sub,
+        user.email,
+        fastify.prisma,
+      );
+      return reply.send(result);
+    },
+  );
+
+  fastify.post<{ Params: InvoiceParams }>(
+    '/invoices/:id/sync-status',
+    async (request, reply) => {
+      const user = assertUser(request);
+      const result = await syncInvoiceStatus(
+        user.tenantId,
+        request.params.id,
         user.sub,
         user.email,
         fastify.prisma,

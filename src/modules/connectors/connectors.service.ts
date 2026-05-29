@@ -162,6 +162,31 @@ function rowToInvoiceBody(mapped: Record<string, unknown>) {
 }
 
 /**
+ * Retrieves a single connector configuration by ID, scoped to tenant.
+ */
+export async function getConnectorById(tenantId: string, connectorId: string, prisma: PrismaClient) {
+  const connector = await prisma.connectorConfig.findFirst({
+    where: { id: connectorId, tenantId, deletedAt: null },
+  });
+  if (!connector) throw Object.assign(new Error('Connector not found'), { statusCode: 404 });
+  return connector;
+}
+
+/**
+ * Soft-deletes a connector configuration.
+ */
+export async function deleteConnector(tenantId: string, connectorId: string, prisma: PrismaClient) {
+  const connector = await prisma.connectorConfig.findFirst({
+    where: { id: connectorId, tenantId, deletedAt: null },
+  });
+  if (!connector) throw Object.assign(new Error('Connector not found'), { statusCode: 404 });
+  await prisma.connectorConfig.update({
+    where: { id: connectorId },
+    data: { deletedAt: new Date() },
+  });
+}
+
+/**
  * Lists saved connector configurations for a tenant.
  */
 export async function listConnectors(tenantId: string, prisma: PrismaClient) {

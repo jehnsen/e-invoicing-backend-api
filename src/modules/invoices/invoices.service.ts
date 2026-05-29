@@ -3,6 +3,7 @@ import { SendMessageCommand } from '@aws-sdk/client-sqs';
 import { sqsClient } from '../../config/aws';
 import { env } from '../../config/env';
 import { logger } from '../../lib/logger';
+import { getInvoiceStatus } from '../../lib/bir-client';
 import { CreateInvoiceBody, UpdateInvoiceBody, InvoiceQuery, CancelInvoiceBody } from './invoices.schema';
 import { buildInvoiceCreateData, serializeInvoice } from './invoices.transformer';
 
@@ -72,7 +73,7 @@ export async function listInvoices(
   query: InvoiceQuery,
   prisma: PrismaClient,
 ) {
-  const where: Parameters<PrismaClient['invoice']['findMany']>[0]['where'] = {
+  const where: NonNullable<Parameters<PrismaClient['invoice']['findMany']>[0]>['where'] = {
     tenantId,     // Multi-tenancy: ALWAYS scope to tenant
     deletedAt: null,
   };
@@ -160,8 +161,10 @@ export async function updateInvoice(
   if (body.buyerEmail !== undefined) updateData.buyerEmail = body.buyerEmail;
 
   if (body.lineItems) {
-    await prisma.invoiceLineItem.deleteMany({ where: { invoiceId } });
+    // deleteMany + create in a single nested write — Prisma wraps both in one transaction,
+    // so a failed create cannot leave the invoice with zero line items.
     updateData.lineItems = {
+      deleteMany: {},
       create: body.lineItems.map((item) => ({
         lineNumber: item.lineNumber,
         itemCode: item.itemCode,
@@ -261,6 +264,68 @@ export async function submitInvoice(
 
   logger.info({ tenantId, invoiceId }, 'Invoice submitted to SQS queue');
   return { message: 'Invoice queued for BIR transmission', invoiceId, status: 'QUEUED' };
+}
+
+/**
+ * Polls the BIR EIS API for the current status of a submitted invoice and updates the local record.
+ * Only callable on invoices that have a birIref (i.e. already submitted).
+ */
+export async function syncInvoiceStatus(
+  tenantId: string,
+  invoiceId: string,
+  actorId: string,
+  actorEmail: string,
+  prisma: PrismaClient,
+) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, tenantId, deletedAt: null },
+    include: { tenant: true },
+  });
+
+  if (!invoice) throw Object.assign(new Error('Invoice not found'), { statusCode: 404 });
+  if (!invoice.birIref) {
+    throw Object.assign(new Error('Invoice has not been submitted to BIR yet'), { statusCode: 422 });
+  }
+
+  const birStatus = await getInvoiceStatus(
+    invoice.birIref,
+    { tenantId, invoiceId, baseUrl: invoice.tenant.birApiEndpoint ?? undefined },
+    prisma,
+  );
+
+  const internalStatus =
+    birStatus.status === 'ACCEPTED' ? 'ACCEPTED' :
+    birStatus.status === 'REJECTED' ? 'REJECTED' :
+    birStatus.status === 'CANCELLED' ? 'CANCELLED' :
+    invoice.status; // PENDING — no change
+
+  if (internalStatus !== invoice.status) {
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: internalStatus as typeof invoice.status,
+        birResponse: birStatus as unknown as object,
+        ...(internalStatus === 'ACCEPTED' && !invoice.birAcceptedAt ? { birAcceptedAt: new Date() } : {}),
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        actorId,
+        actorEmail,
+        actorType: 'USER',
+        action: 'SYNC_STATUS',
+        resourceType: 'Invoice',
+        resourceId: invoiceId,
+        diff: { from: invoice.status, to: internalStatus, birIref: invoice.birIref },
+      },
+    });
+
+    logger.info({ tenantId, invoiceId, from: invoice.status, to: internalStatus }, 'Invoice status synced from BIR');
+  }
+
+  return { invoiceId, birIref: invoice.birIref, status: internalStatus, birStatus };
 }
 
 /**

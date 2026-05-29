@@ -20,9 +20,11 @@ import archiveRoutes from './modules/archive/archive.routes';
 import complianceRoutes from './modules/compliance/compliance.routes';
 import webhooksRoutes from './modules/webhooks/webhooks.routes';
 import apiKeysRoutes from './modules/apiKeys/apiKeys.routes';
+import usersRoutes from './modules/users/users.routes';
 
 // Workers (cron-scheduled)
 import { retryFailedTransmissions } from './workers/retryTransmission.worker';
+import { retryFailedWebhooks } from './workers/webhookRetry.worker';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const fastify = Fastify({
@@ -37,7 +39,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
 
-  // Core plugins (order matters: prisma → auth → rateLimit → multipart)
+  // Core plugins (order matters: cors → prisma → auth → rateLimit → multipart)
+  await fastify.register(import('@fastify/cors'), {
+    origin: env.CORS_ORIGINS
+      ? env.CORS_ORIGINS.split(',').map((o) => o.trim())
+      : env.NODE_ENV === 'development',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
   await fastify.register(prismaPlugin);
   await fastify.register(authPlugin);
   await fastify.register(rateLimitPlugin);
@@ -104,19 +113,42 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(complianceRoutes);
   await fastify.register(webhooksRoutes);
   await fastify.register(apiKeysRoutes);
+  await fastify.register(usersRoutes);
 
   // 404 handler
   fastify.setNotFoundHandler((_request, reply) => {
     reply.status(404).send({ error: 'Route not found', statusCode: 404 });
   });
 
-  // Scheduled retry job — every 5 minutes
+  // Scheduled jobs
   if (env.NODE_ENV !== 'test') {
     const cron = await import('node-cron');
+
+    // BIR transmission retry — every 5 minutes
     cron.schedule('*/5 * * * *', () => {
       retryFailedTransmissions().catch((err) =>
         logger.error({ err }, 'Retry transmission cron job failed'),
       );
+    });
+
+    // Webhook delivery retry — every minute
+    cron.schedule('* * * * *', () => {
+      retryFailedWebhooks().catch((err) =>
+        logger.error({ err }, 'Webhook retry cron job failed'),
+      );
+    });
+
+    // Expired/revoked refresh token cleanup — daily at 03:00
+    cron.schedule('0 3 * * *', () => {
+      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      fastify.prisma.refreshToken.deleteMany({
+        where: {
+          OR: [
+            { expiresAt: { lte: cutoff } },
+            { revokedAt: { not: null, lte: cutoff } },
+          ],
+        },
+      }).catch((err) => logger.error({ err }, 'Refresh token cleanup cron job failed'));
     });
   }
 

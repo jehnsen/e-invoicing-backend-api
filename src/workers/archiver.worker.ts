@@ -20,7 +20,8 @@ interface ArchiveMessage {
  * S3 lifecycle handles Glacier transition after 90 days automatically.
  */
 export async function startArchiverWorker(): Promise<void> {
-  if (!env.SQS_ARCHIVE_QUEUE_URL) {
+  const queueUrl = env.SQS_ARCHIVE_QUEUE_URL;
+  if (!queueUrl) {
     logger.warn('SQS_ARCHIVE_QUEUE_URL not configured — archiver worker will not start');
     return;
   }
@@ -31,7 +32,7 @@ export async function startArchiverWorker(): Promise<void> {
     try {
       const response = await sqsClient.send(
         new ReceiveMessageCommand({
-          QueueUrl: env.SQS_ARCHIVE_QUEUE_URL,
+          QueueUrl: queueUrl,
           MaxNumberOfMessages: BATCH_SIZE,
           WaitTimeSeconds: 20,
           VisibilityTimeout: 120,
@@ -54,7 +55,7 @@ export async function startArchiverWorker(): Promise<void> {
 
           await sqsClient.send(
             new DeleteMessageCommand({
-              QueueUrl: env.SQS_ARCHIVE_QUEUE_URL!,
+              QueueUrl: queueUrl,
               ReceiptHandle: msg.ReceiptHandle!,
             }),
           );

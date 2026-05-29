@@ -44,6 +44,10 @@ const envSchema = z.object({
 
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(100),
 
+  // Comma-separated allowed CORS origins, e.g. "https://app.eis-ready.ph,https://partner.ph"
+  // Omit or leave empty to allow all origins in development, block all in production.
+  CORS_ORIGINS: z.string().optional(),
+
   SUPERADMIN_EMAIL: z.string().email().optional(),
 });
 

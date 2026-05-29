@@ -9,6 +9,40 @@ interface CreateWebhookBody {
   description?: string;
 }
 
+interface UpdateWebhookBody {
+  url?: string;
+  events?: WebhookEvent[];
+  description?: string;
+  isActive?: boolean;
+}
+
+// Block SSRF targets: localhost, loopback, and private IP ranges.
+function assertSafeWebhookUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw Object.assign(new Error('Invalid webhook URL'), { statusCode: 400 });
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw Object.assign(new Error('Webhook URL must use http or https'), { statusCode: 400 });
+  }
+
+  const h = parsed.hostname.toLowerCase();
+
+  if (h === 'localhost' || h === '0.0.0.0') {
+    throw Object.assign(new Error('Webhook URL must not target localhost'), { statusCode: 400 });
+  }
+
+  // IPv4 private/loopback/link-local ranges + IPv6 loopback/ULA/link-local
+  const privateIp =
+    /^(10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|127\.\d+\.\d+\.\d+|169\.254\.\d+\.\d+|::1$|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:)/i;
+  if (privateIp.test(h)) {
+    throw Object.assign(new Error('Webhook URL must not target private IP addresses'), { statusCode: 400 });
+  }
+}
+
 /**
  * Registers a new outbound webhook endpoint for a tenant.
  * Generates an HMAC signing secret — return it to the caller once.
@@ -18,6 +52,8 @@ export async function createWebhook(
   body: CreateWebhookBody,
   prisma: PrismaClient,
 ) {
+  assertSafeWebhookUrl(body.url);
+
   const secret = randomBytes(32).toString('base64url');
 
   const webhook = await prisma.webhookEndpoint.create({
@@ -69,6 +105,37 @@ export async function deleteWebhook(
   await prisma.webhookEndpoint.update({
     where: { id: webhookId },
     data: { deletedAt: new Date() },
+  });
+}
+
+/**
+ * Updates a webhook endpoint's URL, events, description, or active state.
+ */
+export async function updateWebhook(
+  tenantId: string,
+  webhookId: string,
+  body: UpdateWebhookBody,
+  prisma: PrismaClient,
+) {
+  if (body.url) assertSafeWebhookUrl(body.url);
+
+  const webhook = await prisma.webhookEndpoint.findFirst({
+    where: { id: webhookId, tenantId, deletedAt: null },
+  });
+
+  if (!webhook) throw Object.assign(new Error('Webhook not found'), { statusCode: 404 });
+
+  return prisma.webhookEndpoint.update({
+    where: { id: webhookId },
+    data: {
+      ...(body.url !== undefined && { url: body.url }),
+      ...(body.events !== undefined && { events: body.events }),
+      ...(body.description !== undefined && { description: body.description }),
+      ...(body.isActive !== undefined && { isActive: body.isActive }),
+    },
+    select: {
+      id: true, url: true, events: true, description: true, isActive: true, createdAt: true, updatedAt: true,
+    },
   });
 }
 

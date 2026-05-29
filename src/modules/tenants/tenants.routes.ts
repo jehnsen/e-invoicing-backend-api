@@ -8,6 +8,13 @@ const tenantsRoutes: FastifyPluginAsync = async (fastify) => {
   // All tenant routes require JWT authentication
   fastify.addHook('preHandler', fastify.authenticate);
 
+  // Get own tenant — must be registered before /:id to prevent param capture
+  fastify.get('/tenants/me', async (request, reply) => {
+    const user = assertUser(request);
+    const tenant = await getTenantById(user.tenantId, fastify.prisma);
+    return reply.send({ tenant });
+  });
+
   // List all tenants — superadmin only
   fastify.get<{ Querystring: { cursor?: string; limit?: string } }>('/tenants', async (request, reply) => {
     const user = assertUser(request);

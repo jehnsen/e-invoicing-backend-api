@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { saveConnectorJsonSchema, importBodyJsonSchema, SaveConnectorBody, ImportBody } from './connectors.schema';
-import { processUpload, importInvoices, listConnectors, saveConnector } from './connectors.service';
+import { processUpload, importInvoices, listConnectors, saveConnector, getConnectorById, deleteConnector } from './connectors.service';
 import { suggestFieldMapping } from '../fieldMapping/fieldMapping.service';
 import { assertUser } from '../../lib/request-context';
 
@@ -71,6 +71,21 @@ const connectorsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = assertUser(request);
     const connectors = await listConnectors(user.tenantId, fastify.prisma);
     return reply.send({ connectors });
+  });
+
+  fastify.get<{ Params: { id: string } }>('/connectors/:id', async (request, reply) => {
+    const user = assertUser(request);
+    const connector = await getConnectorById(user.tenantId, request.params.id, fastify.prisma);
+    return reply.send({ connector });
+  });
+
+  fastify.delete<{ Params: { id: string } }>('/connectors/:id', async (request, reply) => {
+    const user = assertUser(request);
+    if (!['OWNER', 'ADMIN'].includes(user.role)) {
+      return reply.status(403).send({ error: 'Insufficient permissions' });
+    }
+    await deleteConnector(user.tenantId, request.params.id, fastify.prisma);
+    return reply.status(204).send();
   });
 
   fastify.post<{ Body: SaveConnectorBody }>(
