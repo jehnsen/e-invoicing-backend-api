@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  CANCELLED
+}
+
+enum TenantPlan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  ACCOUNTANT
+  VIEWER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  QUEUED
+  SIGNING
+  TRANSMITTING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  ARCHIVED
+}
+
+enum InvoiceType {
+  SI  // Sales Invoice
+  OR  // Official Receipt
+  DI  // Delivery Invoice
+  CN  // Credit Note
+  DN  // Debit Note
+}
+
+enum VatType {
+  VATABLE
+  ZERO_RATED
+  EXEMPT
+  MIXED
+}
+
+enum ConnectorType {
+  EXCEL
+  CSV
+  JSON
+  QUICKBOOKS
+  SAP
+  POSTGRES
+  REST_WEBHOOK
+}
+
+enum ApiKeyScope {
+  INVOICE_READ
+  INVOICE_WRITE
+  INVOICE_SUBMIT
+  CONNECTOR_READ
+  CONNECTOR_WRITE
+  COMPLIANCE_READ
+  WEBHOOK_READ
+  WEBHOOK_WRITE
+  ADMIN
+}
+
+enum WebhookEvent {
+  INVOICE_CREATED
+  INVOICE_QUEUED
+  INVOICE_ACCEPTED
+  INVOICE_REJECTED
+  INVOICE_CANCELLED
+  INVOICE_ARCHIVED
+  TRANSMISSION_FAILED
+}
+
+model Tenant {
+  id              String       @id @default(uuid()) @db.Uuid
+  tin             String       @unique
+  registeredName  String
+  tradeName       String?
+  address         String?
+  contactEmail    String
+  contactPhone    String?
+  plan            TenantPlan   @default(STARTER)
+  status          TenantStatus @default(TRIAL)
+
+  // BIR credentials — encrypted at rest with AES-256
+  // NEVER log these fields — see logger.ts [REDACTED] sanitizer
+  birCredentialsEncrypted String?
+  birPrivateKeyArn        String?  // ARN in AWS Secrets Manager
+  birCertificateArn       String?  // ARN in AWS Secrets Manager
+  birApiEndpoint          String?  // per-tenant BIR endpoint override
+
+  invoicePrefix   String?   // e.g. "SI-" prefix for invoice numbering
+  invoiceCounter  Int       @default(0)
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  users           User[]
+  apiKeys         ApiKey[]
+  invoices        Invoice[]
+  connectorConfigs ConnectorConfig[]
+  fieldMappingTemplates FieldMappingTemplate[]
+  webhookEndpoints WebhookEndpoint[]
+  auditLogs       AuditLog[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @db.Uuid
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole  @default(ACCOUNTANT)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+model ApiKey {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @db.Uuid
+  name        String
+  keyHash     String        @unique
+  keyPrefix   String        // e.g. "eir_live_" or "eir_test_"
+  scopes      ApiKeyScope[]
+  isActive    Boolean       @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+
+  @@map("api_keys")
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  tenantId        String        @db.Uuid
+  invoiceNumber   String
+  invoiceType     InvoiceType
+  invoiceDate     DateTime
+  status          InvoiceStatus @default(DRAFT)
+  vatType         VatType       @default(VATABLE)
+
+  // Seller info (denormalized from Tenant for immutability)
+  sellerTin       String
+  sellerName      String
+  sellerAddress   String
+
+  // Buyer info
+  buyerTin        String?
+  buyerName       String
+  buyerAddress    String?
+  buyerEmail      String?
+
+  // Amounts stored as integer centavos — NEVER store as float
+  subtotalCentavos    BigInt  @default(0)
+  vatAmountCentavos   BigInt  @default(0)
+  discountCentavos    BigInt  @default(0)
+  totalAmountCentavos BigInt  @default(0)
+
+  // Raw payload from connector/API
+  rawPayload      Json?
+
+  // BIR-formatted JSON (after transformation)
+  birJson         Json?
+
+  // JWS token (after signing)
+  jwsToken        String?
+
+  // BIR response
+  birIref         String?   // BIR-assigned invoice reference number
+  birResponse     Json?
+  birSubmittedAt  DateTime?
+  birAcceptedAt   DateTime?
+
+  // Cancellation
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  queuedAt        DateTime?
+  processedAt     DateTime?
+  archivedAt      DateTime?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  lineItems       InvoiceLineItem[]
+  transmissions   Transmission[]
+  archiveRecord   ArchiveRecord?
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, invoiceDate])
+  @@index([birIref])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  invoiceId       String   @db.Uuid
+  lineNumber      Int
+  itemCode        String?
+  description     String
+  unit            String
+  quantity        Decimal  @db.Decimal(18, 6)
+
+  // Amounts in centavos
+  unitPriceCentavos   BigInt
+  discountCentavos    BigInt  @default(0)
+  vatRateBps          Int     @default(1200)  // 1200 = 12.00%, 0 = exempt/zero-rated
+  vatAmountCentavos   BigInt  @default(0)
+  totalAmountCentavos BigInt
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_line_items")
+}
+
+model Transmission {
+  id             String   @id @default(uuid()) @db.Uuid
+  invoiceId      String   @db.Uuid
+  tenantId       String   @db.Uuid
+  attemptNumber  Int      @default(1)
+  statusCode     Int?
+  requestBody    Json?
+  responseBody   Json?
+  errorMessage   String?
+  durationMs     Int?
+  success        Boolean  @default(false)
+  sentAt         DateTime @default(now())
+
+  createdAt      DateTime @default(now())
+
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([tenantId, sentAt])
+  @@map("transmissions")
+}
+
+model ConnectorConfig {
+  id            String        @id @default(uuid()) @db.Uuid
+  tenantId      String        @db.Uuid
+  name          String
+  type          ConnectorType
+  isActive      Boolean       @default(true)
+  fieldMapping  Json?
+  settings      Json?         // type-specific settings (e.g. endpoint URL, auth)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+
+  @@map("connector_configs")
+}
+
+model FieldMappingTemplate {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  name         String
+  sourceType   ConnectorType
+  mapping      Json     // { sourceField: string, targetField: string, confidence: number }[]
+  isAiGenerated Boolean @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("field_mapping_templates")
+}
+
+model ArchiveRecord {
+  id              String    @id @default(uuid()) @db.Uuid
+  invoiceId       String    @unique @db.Uuid
+  tenantId        String    @db.Uuid
+  s3Key           String
+  s3Bucket        String
+  glacierId       String?
+  glacierVault    String?
+  retentionUntil  DateTime  // invoice date + 10 years per BIR requirement
+  restoredUntil   DateTime? // when a Glacier restore expires
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  invoice         Invoice   @relation(fields: [invoiceId], references: [id])
+
+  @@index([tenantId])
+  @@map("archive_records")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  actorId      String?  @db.Uuid  // null for system actions
+  actorEmail   String?
+  actorType    String   @default("USER")  // USER | API_KEY | SYSTEM
+  action       String   // CREATE | UPDATE | DELETE | SUBMIT | CANCEL | ARCHIVE | RETRIEVE
+  resourceType String   // Invoice | Tenant | ApiKey | etc.
+  resourceId   String
+  diff         Json?    // before/after state diff
+  ipAddress    String?
+  userAgent    String?
+
+  createdAt    DateTime @default(now())
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}
+
+model WebhookEndpoint {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @db.Uuid
+  url         String
+  secret      String         // HMAC signing secret
+  events      WebhookEvent[]
+  isActive    Boolean        @default(true)
+  description String?
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id])
+  deliveries  WebhookDelivery[]
+
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id              String          @id @default(uuid()) @db.Uuid
+  endpointId      String          @db.Uuid
+  event           WebhookEvent
+  payload         Json
+  statusCode      Int?
+  responseBody    String?
+  success         Boolean         @default(false)
+  attemptCount    Int             @default(1)
+  nextRetryAt     DateTime?
+  deliveredAt     DateTime?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  endpoint        WebhookEndpoint @relation(fields: [endpointId], references: [id])
+
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
+}

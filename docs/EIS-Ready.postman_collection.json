@@ -1,0 +1,818 @@
+{
+  "info": {
+    "name": "EIS Ready — BIR EIS Compliance API",
+    "description": "Complete API collection for the EIS Ready Philippine BIR Electronic Invoicing System middleware.\n\n## Setup\n1. Set the `baseUrl` variable to `http://localhost:3000` for local dev.\n2. Run **Auth → Register Tenant** or **Auth → Login** — the collection auto-saves `accessToken`, `refreshToken`, `tenantId`, and `userId` to collection variables.\n3. All subsequent requests use Bearer auth from the saved `accessToken`.\n\n## Variables\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL |\n| `accessToken` | JWT access token (auto-set on login/register) |\n| `refreshToken` | Refresh token (auto-set on login/register) |\n| `tenantId` | Current tenant UUID (auto-set on login) |\n| `invoiceId` | Last created invoice UUID (auto-set on invoice create) |\n| `apiKeyId` | Last created API key UUID |\n| `webhookId` | Last created webhook UUID |\n| `templateId` | Last created field mapping template UUID |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "tenantId", "value": "", "type": "string" },
+    { "key": "userId", "value": "", "type": "string" },
+    { "key": "invoiceId", "value": "", "type": "string" },
+    { "key": "apiKeyId", "value": "", "type": "string" },
+    { "key": "webhookId", "value": "", "type": "string" },
+    { "key": "templateId", "value": "", "type": "string" },
+    { "key": "uploadToken", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/healthz", "host": ["{{baseUrl}}"], "path": ["healthz"] },
+            "description": "No-auth health check. Returns DB connectivity, SQS config status, and BIR API base URL."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', res.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', res.refreshToken);",
+                  "  pm.test('Tenant registered successfully', () => pm.response.to.have.status(201));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tin\": \"123-456-789-00000\",\n  \"registeredName\": \"Juan dela Cruz Trading Corporation\",\n  \"tradeName\": \"JDC Trading\",\n  \"address\": \"123 Ayala Avenue, Makati City, Metro Manila\",\n  \"contactEmail\": \"contact@jdctrading.ph\",\n  \"contactPhone\": \"+63 2 8888 1234\",\n  \"ownerFirstName\": \"Juan\",\n  \"ownerLastName\": \"dela Cruz\",\n  \"ownerEmail\": \"juan@jdctrading.ph\",\n  \"ownerPassword\": \"SecurePass123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Registers a new tenant and creates the owner user account. Returns a JWT token pair. Tenant starts in TRIAL status."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', res.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', res.refreshToken);",
+                  "  pm.test('Login successful', () => pm.response.to.have.status(200));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juan@jdctrading.ph\",\n  \"password\": \"SecurePass123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Authenticate with email and password. Auto-saves accessToken and refreshToken to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', res.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', res.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Exchange a refresh token for a new access + refresh token pair. Old refresh token is revoked (rotate on use)."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Revokes the provided refresh token. Returns 204 No Content."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "List All Tenants (Superadmin)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/tenants", "host": ["{{baseUrl}}"], "path": ["tenants"] },
+            "description": "Lists all tenants. Requires the authenticated user's email to match SUPERADMIN_EMAIL env var."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tenant",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["tenants", "{{tenantId}}"] },
+            "description": "Get tenant details. Non-superadmin users can only fetch their own tenant."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Tenant",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["tenants", "{{tenantId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"456 BGC, Taguig City, Metro Manila\",\n  \"contactPhone\": \"+63 2 9999 5678\",\n  \"birApiEndpoint\": \"https://sandbox.bir.gov.ph/eis\",\n  \"birPrivateKeyArn\": \"arn:aws:secretsmanager:ap-southeast-1:123456789:secret:tenant-key\",\n  \"birCredentials\": {\n    \"username\": \"bir_user\",\n    \"password\": \"bir_password\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Update tenant settings. BIR credentials are AES-256 encrypted before storage. OWNER or ADMIN role required."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Tenant Plan (Superadmin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["tenants", "{{tenantId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"PROFESSIONAL\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Upgrade tenant plan and activate. Superadmin only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Invoices",
+      "item": [
+        {
+          "name": "Create Sales Invoice (SI)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.invoice && res.invoice.id) {",
+                  "  pm.collectionVariables.set('invoiceId', res.invoice.id);",
+                  "  pm.test('Invoice created', () => pm.response.to.have.status(201));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"SI\",\n  \"invoiceDate\": \"2025-06-01\",\n  \"vatType\": \"VATABLE\",\n  \"buyerTin\": \"987-654-321-00000\",\n  \"buyerName\": \"ABC Retail Corporation\",\n  \"buyerAddress\": \"789 EDSA, Quezon City, Metro Manila\",\n  \"buyerEmail\": \"accounting@abcretail.ph\",\n  \"lineItems\": [\n    {\n      \"lineNumber\": 1,\n      \"itemCode\": \"SVC-001\",\n      \"description\": \"Software Consulting Services\",\n      \"unit\": \"HR\",\n      \"quantity\": 40,\n      \"unitPriceCentavos\": 500000,\n      \"discountCentavos\": 0,\n      \"vatRateBps\": 1200\n    },\n    {\n      \"lineNumber\": 2,\n      \"itemCode\": \"LIC-001\",\n      \"description\": \"Annual Software License\",\n      \"unit\": \"PC\",\n      \"quantity\": 1,\n      \"unitPriceCentavos\": 1500000,\n      \"discountCentavos\": 15000,\n      \"vatRateBps\": 1200\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Creates a DRAFT Sales Invoice (SI). Amounts in centavos — 1 PHP = 100 centavos. Auto-saves invoiceId to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Official Receipt (OR)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"OR\",\n  \"invoiceDate\": \"2025-06-01\",\n  \"vatType\": \"VATABLE\",\n  \"buyerName\": \"Walk-in Customer\",\n  \"lineItems\": [\n    {\n      \"lineNumber\": 1,\n      \"description\": \"Retail Sale — Office Supplies\",\n      \"unit\": \"LOT\",\n      \"quantity\": 1,\n      \"unitPriceCentavos\": 250000,\n      \"discountCentavos\": 0,\n      \"vatRateBps\": 1200\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Creates a DRAFT Official Receipt (OR). BuyerTin is optional for walk-in customers."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Credit Note (CN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"CN\",\n  \"invoiceDate\": \"2025-06-05\",\n  \"vatType\": \"VATABLE\",\n  \"buyerTin\": \"987-654-321-00000\",\n  \"buyerName\": \"ABC Retail Corporation\",\n  \"buyerAddress\": \"789 EDSA, Quezon City\",\n  \"referenceInvoiceNumber\": \"SI-00000001\",\n  \"referenceInvoiceDate\": \"2025-06-01\",\n  \"lineItems\": [\n    {\n      \"lineNumber\": 1,\n      \"description\": \"Return — Defective Goods\",\n      \"unit\": \"PC\",\n      \"quantity\": 2,\n      \"unitPriceCentavos\": 150000,\n      \"discountCentavos\": 0,\n      \"vatRateBps\": 1200\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Creates a Credit Note (CN). Must include referenceInvoiceNumber pointing to the original Sales Invoice."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Zero-Rated Invoice",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"SI\",\n  \"invoiceDate\": \"2025-06-01\",\n  \"vatType\": \"ZERO_RATED\",\n  \"buyerTin\": \"111-222-333-00000\",\n  \"buyerName\": \"Export Client Co.\",\n  \"buyerAddress\": \"1 Export Zone, Clark Freeport\",\n  \"lineItems\": [\n    {\n      \"lineNumber\": 1,\n      \"description\": \"Export Services — Zero-rated\",\n      \"unit\": \"SVC\",\n      \"quantity\": 1,\n      \"unitPriceCentavos\": 1000000,\n      \"discountCentavos\": 0,\n      \"vatRateBps\": 0\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Zero-rated invoice (TRAIN Act — export services). vatRateBps = 0."
+          },
+          "response": []
+        },
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/invoices?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices"],
+              "query": [
+                { "key": "status", "value": "DRAFT", "disabled": true },
+                { "key": "invoiceType", "value": "SI", "disabled": true },
+                { "key": "dateFrom", "value": "2025-01-01", "disabled": true },
+                { "key": "dateTo", "value": "2025-12-31", "disabled": true },
+                { "key": "search", "value": "ABC Retail", "disabled": true },
+                { "key": "cursor", "value": "", "disabled": true },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "List invoices with cursor-based pagination. Enable query params to filter by status, type, date range, or search text."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}"] },
+            "description": "Get a single invoice by ID including all line items."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Invoice (DRAFT only)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"buyerEmail\": \"updated@abcretail.ph\",\n  \"buyerAddress\": \"New Address, Makati City\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Update a DRAFT invoice. Only DRAFT status invoices can be modified."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Invoice for BIR Transmission",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/submit", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "submit"] },
+            "description": "Enqueues the invoice for BIR transmission via SQS. Status changes from DRAFT → QUEUED. Idempotent — already ACCEPTED invoices are skipped."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Invoice",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/cancel", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "cancel"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Duplicate invoice — replaced by SI-00000005\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Cancels an invoice. OWNER or ADMIN role required."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice Archive",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/archive", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "archive"] },
+            "description": "Retrieves the S3 archive record for an ARCHIVED invoice. Returns a presigned download URL (1 hour expiry) or Glacier restore status."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Connectors",
+      "item": [
+        {
+          "name": "Upload File (Multipart)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.uploadToken) {",
+                  "  pm.collectionVariables.set('uploadToken', res.uploadToken);",
+                  "  pm.test('File uploaded and parsed', () => pm.response.to.have.status(200));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/connectors/upload", "host": ["{{baseUrl}}"], "path": ["connectors", "upload"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Upload an .xlsx, .csv, or .json file containing invoice data"
+                }
+              ]
+            },
+            "description": "Upload an invoice file for parsing. Returns:\n- `uploadToken` (valid 30 min) — use in /connectors/import\n- `headers` — detected column names\n- `previewRows` — first 5 rows\n- `mappingSuggestions` — AI-suggested field mappings\n\nAuto-saves uploadToken to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Import Invoices (Confirm Mapping)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/connectors/import", "host": ["{{baseUrl}}"], "path": ["connectors", "import"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uploadToken\": \"{{uploadToken}}\",\n  \"fieldMapping\": [\n    { \"sourceField\": \"Invoice Date\", \"targetField\": \"invoiceDate\" },\n    { \"sourceField\": \"Petsa\", \"targetField\": \"invoiceDate\" },\n    { \"sourceField\": \"Mamimili\", \"targetField\": \"buyerName\" },\n    { \"sourceField\": \"Buyer TIN\", \"targetField\": \"buyerTin\" },\n    { \"sourceField\": \"Halaga\", \"targetField\": \"amount\" },\n    { \"sourceField\": \"Dami\", \"targetField\": \"quantity\" },\n    { \"sourceField\": \"Yunit\", \"targetField\": \"unit\" },\n    { \"sourceField\": \"Paglalarawan\", \"targetField\": \"description\" }\n  ],\n  \"defaultValues\": {\n    \"invoiceType\": \"SI\",\n    \"vatType\": \"VATABLE\",\n    \"vatRateBps\": 1200\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Confirm field mapping and bulk-create invoices from the uploaded file. Uses the uploadToken from /connectors/upload."
+          },
+          "response": []
+        },
+        {
+          "name": "List Connector Configs",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/connectors", "host": ["{{baseUrl}}"], "path": ["connectors"] },
+            "description": "List all saved connector configurations for the tenant."
+          },
+          "response": []
+        },
+        {
+          "name": "Save Connector Config",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/connectors", "host": ["{{baseUrl}}"], "path": ["connectors"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Monthly Sales Report — Excel\",\n  \"type\": \"EXCEL\",\n  \"fieldMapping\": {\n    \"Invoice Date\": \"invoiceDate\",\n    \"Buyer Name\": \"buyerName\",\n    \"Buyer TIN\": \"buyerTin\",\n    \"Amount\": \"amount\",\n    \"Qty\": \"quantity\"\n  },\n  \"settings\": {\n    \"sheetName\": \"Sales\",\n    \"headerRow\": 1\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Save a reusable connector configuration for a specific file format and field mapping."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Field Mapping",
+      "item": [
+        {
+          "name": "Suggest Field Mapping (AI)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/field-mapping/suggest", "host": ["{{baseUrl}}"], "path": ["field-mapping", "suggest"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceHeaders\": [\n    \"Petsa ng Invoice\",\n    \"Mamimili\",\n    \"TIN ng Mamimili\",\n    \"Paglalarawan\",\n    \"Dami\",\n    \"Yunit\",\n    \"Presyo\",\n    \"Halaga\",\n    \"VAT\"\n  ],\n  \"sampleRows\": [\n    {\n      \"Petsa ng Invoice\": \"2025-06-01\",\n      \"Mamimili\": \"ABC Corp\",\n      \"TIN ng Mamimili\": \"987-654-321-00000\",\n      \"Paglalarawan\": \"Consulting\",\n      \"Dami\": 10,\n      \"Yunit\": \"HR\",\n      \"Presyo\": 5000,\n      \"Halaga\": 50000,\n      \"VAT\": 6000\n    },\n    {\n      \"Petsa ng Invoice\": \"2025-06-02\",\n      \"Mamimili\": \"XYZ Inc\",\n      \"TIN ng Mamimili\": \"111-222-333-00000\",\n      \"Paglalarawan\": \"Software License\",\n      \"Dami\": 1,\n      \"Yunit\": \"PC\",\n      \"Presyo\": 15000,\n      \"Halaga\": 15000,\n      \"VAT\": 1800\n    }\n  ],\n  \"connectorType\": \"EXCEL\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "AI-powered field mapping. Sends column headers + sample rows to OpenAI. Falls back to Levenshtein fuzzy matching if OPENAI_API_KEY is not set. Handles Tagalog column names."
+          },
+          "response": []
+        },
+        {
+          "name": "List Field Mapping Templates",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/field-mapping/templates", "host": ["{{baseUrl}}"], "path": ["field-mapping", "templates"] },
+            "description": "List all saved field mapping templates for the tenant."
+          },
+          "response": []
+        },
+        {
+          "name": "Save Field Mapping Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.template && res.template.id) {",
+                  "  pm.collectionVariables.set('templateId', res.template.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/field-mapping/templates", "host": ["{{baseUrl}}"], "path": ["field-mapping", "templates"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tagalog Excel Template v1\",\n  \"sourceType\": \"EXCEL\",\n  \"isAiGenerated\": true,\n  \"mapping\": [\n    { \"sourceField\": \"Petsa ng Invoice\", \"targetField\": \"invoiceDate\", \"confidence\": 0.95 },\n    { \"sourceField\": \"Mamimili\", \"targetField\": \"buyerName\", \"confidence\": 0.98 },\n    { \"sourceField\": \"TIN ng Mamimili\", \"targetField\": \"buyerTin\", \"confidence\": 0.97 },\n    { \"sourceField\": \"Paglalarawan\", \"targetField\": \"description\", \"confidence\": 0.96 },\n    { \"sourceField\": \"Dami\", \"targetField\": \"quantity\", \"confidence\": 0.99 },\n    { \"sourceField\": \"Yunit\", \"targetField\": \"unit\", \"confidence\": 0.99 },\n    { \"sourceField\": \"Presyo\", \"targetField\": \"unitPriceCentavos\", \"confidence\": 0.94 },\n    { \"sourceField\": \"Halaga\", \"targetField\": \"amount\", \"confidence\": 0.97 }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Save a confirmed field mapping as a reusable template. Auto-saves templateId to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Field Mapping Template",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/field-mapping/templates/{{templateId}}", "host": ["{{baseUrl}}"], "path": ["field-mapping", "templates", "{{templateId}}"] },
+            "description": "Soft-deletes a field mapping template by ID. OWNER or ADMIN role required."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Compliance",
+      "item": [
+        {
+          "name": "Compliance Summary",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/compliance/summary", "host": ["{{baseUrl}}"], "path": ["compliance", "summary"] },
+            "description": "Returns invoice status counts, 30-day transmission success rate, year-to-date VAT totals, and recent rejections."
+          },
+          "response": []
+        },
+        {
+          "name": "Audit Log",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compliance/audit-log?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["compliance", "audit-log"],
+              "query": [
+                { "key": "resourceType", "value": "Invoice", "disabled": true },
+                { "key": "cursor", "value": "", "disabled": true },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Paginated immutable audit log. Filter by resourceType (Invoice, Tenant, ApiKey, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "BIR API Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/compliance/bir-status", "host": ["{{baseUrl}}"], "path": ["compliance", "bir-status"] },
+            "description": "Pings the BIR EIS API health endpoint and returns reachability + latency."
+          },
+          "response": []
+        },
+        {
+          "name": "Transmission Log",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transmissions?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["transmissions"],
+              "query": [
+                { "key": "invoiceId", "value": "{{invoiceId}}", "disabled": true },
+                { "key": "cursor", "value": "", "disabled": true },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "List all BIR transmission attempts for the tenant. Filter by invoiceId to see attempts for a specific invoice."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "API Keys",
+      "item": [
+        {
+          "name": "Create API Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.apiKey && res.apiKey.id) {",
+                  "  pm.collectionVariables.set('apiKeyId', res.apiKey.id);",
+                  "  pm.test('API key created', () => pm.response.to.have.status(201));",
+                  "  console.log('SAVE THIS KEY — shown only once:', res.apiKey.plaintextKey);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api-keys", "host": ["{{baseUrl}}"], "path": ["api-keys"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ERP Integration Key\",\n  \"scopes\": [\n    \"INVOICE_READ\",\n    \"INVOICE_WRITE\",\n    \"INVOICE_SUBMIT\",\n    \"CONNECTOR_READ\",\n    \"CONNECTOR_WRITE\"\n  ],\n  \"isLive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Creates a new API key. The `plaintextKey` (eir_live_...) is returned ONCE — save it immediately. Only the bcrypt hash is stored in the database. OWNER or ADMIN role required."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Test API Key",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api-keys", "host": ["{{baseUrl}}"], "path": ["api-keys"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"CI/CD Pipeline Key\",\n  \"scopes\": [\n    \"INVOICE_READ\",\n    \"COMPLIANCE_READ\"\n  ],\n  \"isLive\": false,\n  \"expiresAt\": \"2026-12-31T23:59:59Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Creates a test API key (eir_test_ prefix) with an expiry date."
+          },
+          "response": []
+        },
+        {
+          "name": "List API Keys",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api-keys", "host": ["{{baseUrl}}"], "path": ["api-keys"] },
+            "description": "Lists all API keys for the tenant. Plaintext key is never returned after creation."
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api-keys/{{apiKeyId}}", "host": ["{{baseUrl}}"], "path": ["api-keys", "{{apiKeyId}}"] },
+            "description": "Revokes (deactivates) an API key. The record is preserved for audit purposes. OWNER or ADMIN role required."
+          },
+          "response": []
+        },
+        {
+          "name": "Use API Key Auth (Example)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "eir_live_YOUR_KEY_HERE", "type": "string" }]
+            },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] },
+            "description": "Example of using an API key instead of JWT for machine-to-machine access. Replace `eir_live_YOUR_KEY_HERE` with the actual key returned on creation."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Create Webhook",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.webhook && res.webhook.id) {",
+                  "  pm.collectionVariables.set('webhookId', res.webhook.id);",
+                  "  pm.test('Webhook created', () => pm.response.to.have.status(201));",
+                  "  console.log('SAVE THIS SECRET — shown only once:', res.webhook.secret);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/webhooks", "host": ["{{baseUrl}}"], "path": ["webhooks"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://your-erp.example.com/eis-webhook\",\n  \"events\": [\n    \"INVOICE_ACCEPTED\",\n    \"INVOICE_REJECTED\",\n    \"TRANSMISSION_FAILED\"\n  ],\n  \"description\": \"ERP system invoice status updates\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Registers an outbound webhook endpoint. Returns the HMAC signing `secret` once — store it to verify incoming X-EIS-Signature headers. OWNER or ADMIN role required."
+          },
+          "response": []
+        },
+        {
+          "name": "List Webhooks",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/webhooks", "host": ["{{baseUrl}}"], "path": ["webhooks"] },
+            "description": "Lists all webhook endpoints for the tenant. Secret is never returned after creation."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Webhook",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/webhooks/{{webhookId}}", "host": ["{{baseUrl}}"], "path": ["webhooks", "{{webhookId}}"] },
+            "description": "Soft-deletes a webhook endpoint. OWNER or ADMIN role required."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Webhook Deliveries",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/{{webhookId}}/deliveries?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "{{webhookId}}", "deliveries"],
+              "query": [
+                { "key": "cursor", "value": "", "disabled": true },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Paginated delivery history for a webhook endpoint. Shows status codes, response bodies, and success/failure per event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Scenarios",
+      "description": "End-to-end workflow examples. Run requests in sequence.",
+      "item": [
+        {
+          "name": "Full Invoice Flow",
+          "description": "Run these requests in order to walk through the complete invoice lifecycle.",
+          "item": [
+            {
+              "name": "Step 1 — Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "pm.collectionVariables.set('accessToken', res.accessToken);",
+                      "pm.collectionVariables.set('refreshToken', res.refreshToken);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"juan@jdctrading.ph\",\n  \"password\": \"SecurePass123!\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 2 — Create Invoice",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.invoice) pm.collectionVariables.set('invoiceId', res.invoice.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invoiceType\": \"SI\",\n  \"invoiceDate\": \"2025-06-01\",\n  \"vatType\": \"VATABLE\",\n  \"buyerTin\": \"987-654-321-00000\",\n  \"buyerName\": \"ABC Retail Corporation\",\n  \"buyerAddress\": \"789 EDSA, Quezon City\",\n  \"lineItems\": [\n    {\n      \"lineNumber\": 1,\n      \"description\": \"Professional Services\",\n      \"unit\": \"HR\",\n      \"quantity\": 8,\n      \"unitPriceCentavos\": 500000,\n      \"discountCentavos\": 0,\n      \"vatRateBps\": 1200\n    }\n  ]\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 3 — Submit to BIR",
+              "request": {
+                "method": "POST",
+                "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/submit", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "submit"] }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 4 — Check Invoice Status",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}"] }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 5 — Check Transmission Log",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/transmissions?invoiceId={{invoiceId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["transmissions"],
+                  "query": [{ "key": "invoiceId", "value": "{{invoiceId}}" }]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 6 — Compliance Summary",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{baseUrl}}/compliance/summary", "host": ["{{baseUrl}}"], "path": ["compliance", "summary"] }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "name": "eis-ready-backend",
+  "version": "1.0.0",
+  "description": "Philippine BIR EIS compliance SaaS middleware backend",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --project tsconfig.json",
+    "start": "node dist/server.js",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/client-sqs": "^3.600.0",
+    "@aws-sdk/s3-request-presigner": "^3.600.0",
+    "@fastify/aws-lambda": "^5.0.0",
+    "@fastify/helmet": "^13.0.0",
+    "@fastify/jwt": "^10.1.0",
+    "@fastify/multipart": "^9.0.0",
+    "@fastify/rate-limit": "^10.0.0",
+    "@prisma/client": "^5.15.0",
+    "bcryptjs": "^2.4.3",
+    "fastest-levenshtein": "^1.0.16",
+    "fastify": "^5.8.5",
+    "fastify-plugin": "^4.5.1",
+    "jose": "^5.6.3",
+    "node-cron": "^4.2.1",
+    "openai": "^4.68.0",
+    "pino": "^9.3.1",
+    "pino-pretty": "^11.2.1",
+    "uuid": "^14.0.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.1",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.10",
+    "@types/node-cron": "^3.0.11",
+    "@types/supertest": "^6.0.2",
+    "@types/uuid": "^10.0.0",
+    "@vitest/coverage-v8": "^4.1.7",
+    "prisma": "^5.15.0",
+    "supertest": "^7.0.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
