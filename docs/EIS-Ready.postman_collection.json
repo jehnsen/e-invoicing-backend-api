@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "EIS Ready — BIR EIS Compliance API",
-    "description": "Complete API collection for the EIS Ready Philippine BIR Electronic Invoicing System middleware.\n\n## Setup\n1. Set the `baseUrl` variable to `http://localhost:3000` for local dev.\n2. Run **Auth → Register Tenant** or **Auth → Login** — the collection auto-saves `accessToken`, `refreshToken`, `tenantId`, and `userId` to collection variables.\n3. All subsequent requests use Bearer auth from the saved `accessToken`.\n\n## Variables\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL |\n| `accessToken` | JWT access token (auto-set on login/register) |\n| `refreshToken` | Refresh token (auto-set on login/register) |\n| `tenantId` | Current tenant UUID (auto-set on login) |\n| `invoiceId` | Last created invoice UUID (auto-set on invoice create) |\n| `apiKeyId` | Last created API key UUID |\n| `webhookId` | Last created webhook UUID |\n| `templateId` | Last created field mapping template UUID |",
+    "description": "Complete API collection for the EIS Ready Philippine BIR Electronic Invoicing System middleware.\n\n## Setup\n1. Set the `baseUrl` variable to `http://localhost:3000` for local dev.\n2. Run **Auth → Register Tenant** or **Auth → Login** — the collection auto-saves `accessToken`, `refreshToken`, and `tenantId` to collection variables.\n3. All subsequent requests use Bearer auth from the saved `accessToken`.\n\n## Variables\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL |\n| `accessToken` | JWT access token (auto-set on login/register) |\n| `refreshToken` | Refresh token (auto-set on login/register) |\n| `tenantId` | Current tenant UUID (auto-set on login) |\n| `invoiceId` | Last created invoice UUID (auto-set on invoice create) |\n| `connectorId` | Last saved connector UUID (auto-set on save connector) |\n| `apiKeyId` | Last created API key UUID |\n| `webhookId` | Last created webhook UUID |\n| `targetUserId` | Target user UUID for user management requests |\n| `templateId` | Last created field mapping template UUID |\n| `uploadToken` | Upload token from /connectors/upload (auto-set) |",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -9,10 +9,11 @@
     { "key": "accessToken", "value": "", "type": "string" },
     { "key": "refreshToken", "value": "", "type": "string" },
     { "key": "tenantId", "value": "", "type": "string" },
-    { "key": "userId", "value": "", "type": "string" },
     { "key": "invoiceId", "value": "", "type": "string" },
+    { "key": "connectorId", "value": "", "type": "string" },
     { "key": "apiKeyId", "value": "", "type": "string" },
     { "key": "webhookId", "value": "", "type": "string" },
+    { "key": "targetUserId", "value": "", "type": "string" },
     { "key": "templateId", "value": "", "type": "string" },
     { "key": "uploadToken", "value": "", "type": "string" }
   ],
@@ -152,6 +153,15 @@
       "name": "Tenants",
       "item": [
         {
+          "name": "Get My Tenant",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/tenants/me", "host": ["{{baseUrl}}"], "path": ["tenants", "me"] },
+            "description": "Returns the authenticated user's own tenant profile. Shortcut for GET /tenants/:id using your own tenantId."
+          },
+          "response": []
+        },
+        {
           "name": "List All Tenants (Superadmin)",
           "request": {
             "method": "GET",
@@ -161,11 +171,11 @@
           "response": []
         },
         {
-          "name": "Get Tenant",
+          "name": "Get Tenant by ID",
           "request": {
             "method": "GET",
             "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["tenants", "{{tenantId}}"] },
-            "description": "Get tenant details. Non-superadmin users can only fetch their own tenant."
+            "description": "Get tenant details by ID. Non-superadmin users can only fetch their own tenant."
           },
           "response": []
         },
@@ -196,6 +206,131 @@
               "options": { "raw": { "language": "json" } }
             },
             "description": "Upgrade tenant plan and activate. Superadmin only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/users/me", "host": ["{{baseUrl}}"], "path": ["users", "me"] },
+            "description": "Returns the authenticated user's own profile (id, email, name, role, lastLoginAt). Never returns passwordHash."
+          },
+          "response": []
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/users/me", "host": ["{{baseUrl}}"], "path": ["users", "me"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Santos\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Update own first/last name. Cannot change own role — use PATCH /users/:userId for that (OWNER/ADMIN only)."
+          },
+          "response": []
+        },
+        {
+          "name": "Change My Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/users/me/password", "host": ["{{baseUrl}}"], "path": ["users", "me", "password"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"SecurePass123!\",\n  \"newPassword\": \"NewSecurePass456!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Change own password. Requires current password for verification. Revokes all existing refresh token sessions on success — you will need to log in again."
+          },
+          "response": []
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "role", "value": "ACCOUNTANT", "disabled": true },
+                { "key": "isActive", "value": "true", "disabled": true },
+                { "key": "cursor", "value": "", "disabled": true },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "List all users in the tenant. OWNER or ADMIN role required. Cursor-based pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/users/{{targetUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{targetUserId}}"] },
+            "description": "Get a specific user by ID. OWNER or ADMIN can view any user; others can only view themselves."
+          },
+          "response": []
+        },
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "  pm.collectionVariables.set('targetUserId', res.id);",
+                  "  pm.test('User created', () => pm.response.to.have.status(201));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"maria@jdctrading.ph\",\n  \"firstName\": \"Maria\",\n  \"lastName\": \"Santos\",\n  \"role\": \"ACCOUNTANT\",\n  \"password\": \"TempPass789!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Create a new user in the same tenant. OWNER or ADMIN role required.\n\n**Role hierarchy:** OWNER > ADMIN > ACCOUNTANT > VIEWER\n- OWNER can create any role\n- ADMIN can create ACCOUNTANT or VIEWER only\n- OWNER role cannot be assigned via this endpoint\n\nAuto-saves targetUserId to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/users/{{targetUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{targetUserId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"ADMIN\",\n  \"isActive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Update a user's role, active status, or name. OWNER or ADMIN role required. Cannot change own role. Cannot modify users of equal or higher rank."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/users/{{targetUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{targetUserId}}"] },
+            "description": "Soft-deletes a user (sets deletedAt, isActive=false) and immediately revokes all their active sessions. OWNER or ADMIN role required. Cannot delete own account."
           },
           "response": []
         }
@@ -320,7 +455,7 @@
               "raw": "{\n  \"buyerEmail\": \"updated@abcretail.ph\",\n  \"buyerAddress\": \"New Address, Makati City\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Update a DRAFT invoice. Only DRAFT status invoices can be modified."
+            "description": "Update a DRAFT invoice. Only DRAFT status invoices can be modified. Line item replacement is atomic — a failed create will not leave the invoice with zero items."
           },
           "response": []
         },
@@ -330,6 +465,15 @@
             "method": "POST",
             "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/submit", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "submit"] },
             "description": "Enqueues the invoice for BIR transmission via SQS. Status changes from DRAFT → QUEUED. Idempotent — already ACCEPTED invoices are skipped."
+          },
+          "response": []
+        },
+        {
+          "name": "Sync BIR Status",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/sync-status", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "sync-status"] },
+            "description": "Polls the BIR EIS API for the current status of a submitted invoice and updates the local record if it changed.\n\nRequires the invoice to have a `birIref` (i.e. already submitted to BIR). Returns:\n- `invoiceId` — internal UUID\n- `birIref` — BIR Invoice Reference Number\n- `status` — updated internal status (ACCEPTED / REJECTED / CANCELLED / unchanged)\n- `birStatus` — raw BIR status response"
           },
           "response": []
         },
@@ -422,6 +566,20 @@
         },
         {
           "name": "Save Connector Config",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.connector && res.connector.id) {",
+                  "  pm.collectionVariables.set('connectorId', res.connector.id);",
+                  "  pm.test('Connector saved', () => pm.response.to.have.status(201));",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -431,7 +589,25 @@
               "raw": "{\n  \"name\": \"Monthly Sales Report — Excel\",\n  \"type\": \"EXCEL\",\n  \"fieldMapping\": {\n    \"Invoice Date\": \"invoiceDate\",\n    \"Buyer Name\": \"buyerName\",\n    \"Buyer TIN\": \"buyerTin\",\n    \"Amount\": \"amount\",\n    \"Qty\": \"quantity\"\n  },\n  \"settings\": {\n    \"sheetName\": \"Sales\",\n    \"headerRow\": 1\n  }\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Save a reusable connector configuration for a specific file format and field mapping."
+            "description": "Save a reusable connector configuration for a specific file format and field mapping. Auto-saves connectorId to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Connector Config",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/connectors/{{connectorId}}", "host": ["{{baseUrl}}"], "path": ["connectors", "{{connectorId}}"] },
+            "description": "Retrieve a single connector configuration by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Connector Config",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/connectors/{{connectorId}}", "host": ["{{baseUrl}}"], "path": ["connectors", "{{connectorId}}"] },
+            "description": "Soft-deletes a connector configuration. OWNER or ADMIN role required."
           },
           "response": []
         }
@@ -529,7 +705,7 @@
                 { "key": "limit", "value": "20" }
               ]
             },
-            "description": "Paginated immutable audit log. Filter by resourceType (Invoice, Tenant, ApiKey, etc.)."
+            "description": "Paginated immutable audit log. Filter by resourceType (Invoice, Tenant, ApiKey, User, etc.)."
           },
           "response": []
         },
@@ -672,7 +848,7 @@
               "raw": "{\n  \"url\": \"https://your-erp.example.com/eis-webhook\",\n  \"events\": [\n    \"INVOICE_ACCEPTED\",\n    \"INVOICE_REJECTED\",\n    \"TRANSMISSION_FAILED\"\n  ],\n  \"description\": \"ERP system invoice status updates\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Registers an outbound webhook endpoint. Returns the HMAC signing `secret` once — store it to verify incoming X-EIS-Signature headers. OWNER or ADMIN role required."
+            "description": "Registers an outbound webhook endpoint. Returns the HMAC signing `secret` once — store it to verify incoming X-EIS-Signature headers.\n\n**SSRF protection:** Private IPs (10.x, 172.16–31.x, 192.168.x, 127.x, 169.254.x) and localhost are blocked.\n\nOWNER or ADMIN role required."
           },
           "response": []
         },
@@ -682,6 +858,21 @@
             "method": "GET",
             "url": { "raw": "{{baseUrl}}/webhooks", "host": ["{{baseUrl}}"], "path": ["webhooks"] },
             "description": "Lists all webhook endpoints for the tenant. Secret is never returned after creation."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Webhook",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/webhooks/{{webhookId}}", "host": ["{{baseUrl}}"], "path": ["webhooks", "{{webhookId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://your-erp.example.com/eis-webhook-v2\",\n  \"events\": [\n    \"INVOICE_ACCEPTED\",\n    \"INVOICE_REJECTED\",\n    \"INVOICE_CANCELLED\",\n    \"TRANSMISSION_FAILED\"\n  ],\n  \"description\": \"ERP system — updated endpoint\",\n  \"isActive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Update a webhook endpoint's URL, subscribed events, description, or active state. All fields optional. SSRF protection applies to URL changes. OWNER or ADMIN role required."
           },
           "response": []
         },
@@ -707,7 +898,7 @@
                 { "key": "limit", "value": "20" }
               ]
             },
-            "description": "Paginated delivery history for a webhook endpoint. Shows status codes, response bodies, and success/failure per event."
+            "description": "Paginated delivery history for a webhook endpoint. Shows status codes, response bodies, success/failure, and retry attempt count per event."
           },
           "response": []
         }
@@ -782,7 +973,16 @@
               "response": []
             },
             {
-              "name": "Step 4 — Check Invoice Status",
+              "name": "Step 4 — Sync BIR Status",
+              "request": {
+                "method": "POST",
+                "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/sync-status", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "sync-status"] },
+                "description": "Poll BIR for the current acceptance status. Run after the invoice has been processed by the SQS worker and has a birIref assigned."
+              },
+              "response": []
+            },
+            {
+              "name": "Step 5 — Check Invoice Status",
               "request": {
                 "method": "GET",
                 "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}"] }
@@ -790,7 +990,7 @@
               "response": []
             },
             {
-              "name": "Step 5 — Check Transmission Log",
+              "name": "Step 6 — Check Transmission Log",
               "request": {
                 "method": "GET",
                 "url": {
@@ -803,10 +1003,71 @@
               "response": []
             },
             {
-              "name": "Step 6 — Compliance Summary",
+              "name": "Step 7 — Compliance Summary",
               "request": {
                 "method": "GET",
                 "url": { "raw": "{{baseUrl}}/compliance/summary", "host": ["{{baseUrl}}"], "path": ["compliance", "summary"] }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "User Management Flow",
+          "description": "Run these requests in order to invite a new user and manage their access.",
+          "item": [
+            {
+              "name": "Step 1 — Create Accountant User",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.id) pm.collectionVariables.set('targetUserId', res.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"cpa@jdctrading.ph\",\n  \"firstName\": \"Rosa\",\n  \"lastName\": \"Reyes\",\n  \"role\": \"ACCOUNTANT\",\n  \"password\": \"TempPass789!\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 2 — Promote to Admin",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/users/{{targetUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{targetUserId}}"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"role\": \"ADMIN\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 3 — List All Users",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
+              },
+              "response": []
+            },
+            {
+              "name": "Step 4 — Deactivate User",
+              "request": {
+                "method": "DELETE",
+                "url": { "raw": "{{baseUrl}}/users/{{targetUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{targetUserId}}"] }
               },
               "response": []
             }
